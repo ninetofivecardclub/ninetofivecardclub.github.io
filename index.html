@@ -148,8 +148,12 @@ button.chip{cursor:pointer}
 .seatb.mine{opacity:1;background:var(--copper);border-color:var(--copper);color:#141414}.seatb.mine small{color:#3a2a14}
 .tctl{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--bg1);border:1px solid var(--hair);font-size:13px;color:var(--muted)}
 .tctl b{font:400 20px/1.2 var(--serif);color:var(--ink)}
+/* Einladen */
+.wa-b{flex:0 0 auto;padding:7px 10px;border-radius:8px;border:0;background:#25D366;color:#0b2e17;font:600 12px/1 var(--sans)}
+.wa-b.done{background:transparent;color:#7FCBA0;box-shadow:inset 0 0 0 1px #2f6b4a}
+.btn-wa{background:#25D366;color:#0b2e17}
 /* Spieler-Übersicht für den Host */
-.plrow{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:11px 2px;border:0;border-top:1px solid var(--hair);background:transparent;color:var(--ink);text-align:left}
+.plrow{cursor:pointer;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:11px 2px;border:0;border-top:1px solid var(--hair);background:transparent;color:var(--ink);text-align:left}
 #m_list .plrow:first-child{border-top:0}
 .plrow .nrb{font:600 14px/1 var(--sans);color:var(--copper-lt);font-variant-numeric:tabular-nums}
 .pli{display:grid;gap:2px;min-width:0}
@@ -362,6 +366,10 @@ const LFN={
     if(empty){empty.nickname=n;empty.real_name=n;return {ok:true,nr:empty.nr,created:true}}
     const nr=nextNr(db);if(!nr)return {ok:false,msg:"Keine freie Nummer."};
     db.members[nr]={nr,real_name:n,nickname:n,pin:null,is_admin:false,fails:0,lock:0};return {ok:true,nr,created:true}},
+  n2f_admin_setname(b,db){const m=lwho(db,b.p_token);if(!m||!m.is_admin)return {ok:false,msg:"Nur für den Host."};const x=db.members[b.p_nr];if(!x)return {ok:false,msg:"Diese Nummer gibt es nicht."};
+    const n=String(b.p_name||"").trim().replace(/\s+/g," ").slice(0,20);
+    if(n&&Object.values(db.members).some(y=>y.nr!==x.nr&&(y.nickname||"").toLowerCase()===n.toLowerCase()))return {ok:false,msg:"Diesen Namen gibt es schon."};
+    x.real_name=n;if(x.pin==null)x.nickname=n||null;return {ok:true}},
   n2f_logout(b,db){delete db.sessions[b.p_token];return {ok:true}}
 };
 async function rpc(fn,body){
@@ -381,7 +389,7 @@ const ini=nr=>{const s=nm(nr);return /^\d+$/.test(s)?s.slice(-2):s.split(" ").ma
 let S={settings:{...DEF},tours:{},tab:"turniere",open:null,season:String(new Date().getFullYear())};
 try{const p=JSON.parse(localStorage.getItem("ninetofive-view")||"{}");if(p.tab)S.tab=p.tab}catch(e){}
 const saveView=()=>{try{localStorage.setItem("ninetofive-view",JSON.stringify({tab:S.tab}))}catch(e){}};
-function applyShared(st){st=st||{};S.settings={...DEF,...(st.settings||{})};S.tours=st.tours||{};S.carry=st.carry||null;if(S.open&&!S.tours[S.open])S.open=null}
+function applyShared(st){st=st||{};S.settings={...DEF,...(st.settings||{})};S.tours=st.tours||{};S.carry=st.carry||null;S.invited=st.invited||{};if(S.open&&!S.tours[S.open])S.open=null}
 
 /* ================= Tische & Plätze ================= */
 const atTable=(t,i)=>t.reg.filter(r=>r.t===i);
@@ -668,14 +676,18 @@ function playerRows(){
   const yr=String(new Date().getFullYear()), st=standings(yr), by={};st.forEach(a=>by[a.nr]=a);
   return (ADMIN||[]).map(m=>({...m,st:by[m.nr]||null,regs:upcoming().filter(t=>t.reg.some(r=>r.m===m.nr)).length}));
 }
+const APP_URL=()=>location.origin+location.pathname.replace(/index\.html$/,"");
+const inviteText=nr=>{const m=(ADMIN||[]).find(x=>x.nr===nr),n=m&&(m.real_name||m.nickname);return `Hallo${n?" "+n:""}! ♠ Du bist beim nine to five Card Club dabei.\n\n1. Öffne: ${APP_URL()}\n2. Deine Nummer: ${n3(nr)}\n3. Erste PIN: 0000\n\nDann suchst du dir deinen Spitznamen und deine eigene PIN aus. Fertig!\n\nTipp: Leg den Link auf deinen Startbildschirm, dann ist es wie eine App.`};
 function playersPanel(){
   const all=playerRows(), named=all.filter(m=>m.nickname||m.real_name||m.pin), withPts=all.filter(m=>m.st), open=named.filter(m=>!m.pin&&!m.admin);
-  const flt={all:named,pts:withPts,open,empty:all.filter(m=>!m.nickname&&!m.real_name&&!m.pin)}[MFILT]||named;
+  const empty=all.filter(m=>!m.nickname&&!m.real_name&&!m.pin);
+  const flt={all,named,pts:withPts,open,empty}[MFILT]||all;
   const rows=flt.filter(mMatch).sort((a,b)=>MFILT==="pts"?a.st.pos-b.st.pos:a.nr-b.nr);
-  return `<section class="panel"><div class="ptitle"><h2>Alle Spieler</h2><span class="s">${named.length} mit Namen</span></div>
-  <div class="chips">${[["all",`Alle (${named.length})`],["pts",`Mit Punkten (${withPts.length})`],["open",`Noch nicht angemeldet (${open.length})`],["empty",`Freie Nummern`]].map(([k,l])=>`<button class="chip" data-mfilt="${k}" aria-pressed="${MFILT===k}">${l}</button>`).join("")}</div>
+  return `<section class="panel"><div class="ptitle"><h2>Alle Mitglieder</h2><span class="s">${all.length} Nummern · ${named.length} mit Namen</span></div>
+  <p class="s" style="margin:6px 0 0">Nummer antippen → Namen eintragen → per WhatsApp einladen.</p>
+  <div class="chips">${[["all",`Alle (${all.length})`],["named",`Mit Namen (${named.length})`],["empty",`Noch frei (${empty.length})`],["open",`Noch nicht angemeldet (${open.length})`],["pts",`Mit Punkten (${withPts.length})`]].map(([k,l])=>`<button class="chip" data-mfilt="${k}" aria-pressed="${MFILT===k}">${l}</button>`).join("")}</div>
   <input id="m_find" class="inp" type="search" placeholder="Suchen: Nummer oder Name" value="${esc(MFIND)}" style="margin-top:10px">
-  <div id="m_list">${rows.map(m=>`<button class="plrow" data-pl="${m.nr}"><span class="nrb">${n3(m.nr)}</span><span class="pli"><b>${esc(m.nickname||m.real_name||"– frei –")}${m.admin?` <span class="badge b-run">Host</span>`:""}</b><span class="s">${m.real_name&&m.real_name!==m.nickname?esc(m.real_name)+" · ":""}${m.pin?"angemeldet":"Erst-PIN 0000"}${m.regs?` · ${m.regs} Anmeldung${m.regs>1?"en":""}`:""}</span></span><span class="plp">${m.st?`<b>${fp(m.st.pts)}</b><small>Platz ${m.st.pos}</small>`:`<small>–</small>`}</span></button>`).join("")||`<p class="empty">Niemand gefunden.</p>`}</div></section>`;
+  <div id="m_list">${rows.map(m=>{const inv=(S.invited||{})[m.nr];return `<div class="plrow" role="button" tabindex="0" data-pl="${m.nr}"><span class="nrb">${n3(m.nr)}</span><span class="pli"><b>${esc(m.nickname||m.real_name||"– frei –")}${m.admin?` <span class="badge b-run">Host</span>`:""}</b><span class="s">${m.real_name&&m.real_name!==m.nickname?esc(m.real_name)+" · ":""}${m.admin?"Host":m.pin?"angemeldet ✓":inv?"eingeladen ✓":"noch nicht eingeladen"}${m.st?` · ${fp(m.st.pts)} P. · Platz ${m.st.pos}`:""}</span></span>${m.admin||m.pin?`<span class="plp">${m.st?`<b>${fp(m.st.pts)}</b>`:""}</span>`:`<button class="wa-b${inv?" done":""}" data-wa="${m.nr}" aria-label="${n3(m.nr)} per WhatsApp einladen">WhatsApp</button>`}</div>`}).join("")||`<p class="empty">Niemand gefunden.</p>`}</div></section>`;
 }
 function playerCard(){
   if(PL==null) return "";
@@ -687,7 +699,9 @@ function playerCard(){
   <div class="pf-stats"><div class="pf-stat"><b>${a?fp(a.pts):"0.00"}</b><span>Punkte ${yr}</span></div><div class="pf-stat"><b>${a?a.pos+".":"–"}</b><span>Platz in der Rangliste</span></div><div class="pf-stat"><b>${all?all.n:0}</b><span>Turniere in der App</span></div><div class="pf-stat"><b>${cr?fp(cr.pts):"–"}</b><span>Übertrag (alter Stand)</span></div></div>
   <h3>Angemeldet für</h3>${up.length?up.map(t=>{const r=t.reg.find(x=>x.m===m.nr);return `<button class="tcard" data-open="${t.id}" style="grid-template-columns:1fr auto"><span><span class="tname">${esc(fmtShort(t.date))} · ${esc(tTitle(t))}</span></span><span class="badge ${r.t==null?"b-wait":"b-me"}">${esc(seatTxt(r))}</span></button>`}).join(""):`<p class="empty">Keine Anmeldungen.</p>`}
   <h3>Ergebnisse</h3>${hist.length?hist.map(t=>`<div class="row"><span class="grow">${esc(fmtShort(t.date))} · ${esc(tTitle(t))}<br><span class="s">Platz ${t.res[m.nr].place} von ${Object.keys(t.res).length}</span></span><b>+${fp(t.res[m.nr].pts)}</b></div>`).join(""):`<p class="empty">Noch keine Turniere in der App.</p>`}
-  <div class="actions"><button class="btn btn-line" data-mren="${m.nr}">Echten Namen ändern</button>${m.admin?"":`<button class="btn btn-line" data-mreset="${m.nr}">PIN auf 0000 zurücksetzen</button>`}<button class="btn btn-main" data-act="plclose">Schließen</button></div></section>`;
+  ${m.admin?"":`<div class="form"><label>Name${m.pin?" (echter Name – den Spitznamen wählt der Spieler selbst)":" (wird bei der ersten Anmeldung vorgeschlagen)"}<input id="pl_name" class="inp" maxlength="20" placeholder="z. B. Vorname" value="${esc(m.real_name||m.nickname||"")}"></label><button class="btn btn-main" data-act="plname" data-nr="${m.nr}">Name speichern</button></div>
+  ${m.pin?"":`<div class="actions"><button class="btn btn-wa" data-wa="${m.nr}">Per WhatsApp einladen</button></div><p class="s" style="margin:6px 0 0">${(S.invited||{})[m.nr]?"✓ Schon eingeladen – du kannst die Nachricht nochmal schicken.":`Die Nachricht enthält Link, Nummer ${n3(m.nr)} und Erst-PIN 0000.`}</p>`}`}
+  <div class="actions">${m.admin?"":`<button class="btn btn-line" data-mreset="${m.nr}">PIN auf 0000 zurücksetzen</button>`}<button class="btn btn-line" data-act="plclose">Schließen</button></div></section>`;
 }
 const mMatch=m=>{const q=MFIND.trim().toLowerCase();if(!q)return true;return n3(m.nr).includes(q.padStart(Math.min(3,q.length),"0"))||String(m.nr)===q||(m.nickname||"").toLowerCase().includes(q)||(m.real_name||"").toLowerCase().includes(q)};
 function viewAdmin(){
@@ -732,6 +746,8 @@ document.addEventListener("click",e=>{
     document.getElementById("s_seats_note").textContent=`${n} Plätze an jedem Tisch · ${n*TABLES} Plätze an 5 Tischen`;return}
   const stp=e.target.closest("[data-step]");
   if(stp){const el=document.getElementById("s_bonus"),v=parseFloat(String(el.value).replace(",","."))||0;el.value=Math.max(0,v+ +stp.dataset.step);return}
+  const wa=e.target.closest("[data-wa]");
+  if(wa){e.stopPropagation();const nr=+wa.dataset.wa;window.open("https://wa.me/?text="+encodeURIComponent(inviteText(nr)),"_blank","noopener");S.invited=S.invited||{};S.invited[nr]=Date.now();commit(`Einladung für ${n3(nr)} geöffnet`);return}
   const pl=e.target.closest("[data-pl]"); if(pl){PL=+pl.dataset.pl;render();scrollTo(0,0);return}
   const mf=e.target.closest("[data-mfilt]"); if(mf){MFILT=mf.dataset.mfilt;render();return}
   const se=e.target.closest("[data-season]"); if(se){S.season=se.dataset.season;render();return}
@@ -762,6 +778,8 @@ document.addEventListener("click",e=>{
     case "logout": rpc("n2f_logout",{p_token:TOKEN}).catch(()=>{});setToken(null);ME=null;showLogin();return;
     case "plclose": PL=null;render();return;
     case "pickclose": PICK=null;render();return;
+    case "plname":{const nr=+a.dataset.nr,n=val("pl_name").trim();a.disabled=true;
+      rpc("n2f_admin_setname",{p_token:TOKEN,p_nr:nr,p_name:n}).then(r=>{if(!r.ok){toast(r.msg||"Hat nicht geklappt");a.disabled=false;return}toast(n?`${n3(nr)} heißt jetzt ${n}`:"Name entfernt");return pull(true)}).catch(()=>{toast("Das geht erst nach dem Speicher-Update – bitte IT fragen");a.disabled=false});return}
     case "topen": if(openT(t)>=TABLES)return;t.tables=openT(t)+1;rebalance(t);commit(`Tisch ${t.tables} ist jetzt offen`);return;
     case "tclose":{const n=openT(t);if(n<=1)return;if(atTable(t,n-1).length){toast(`An Tisch ${n} sitzen noch Spieler – erst austragen`);return}t.tables=n-1;PICK=null;commit(`Tisch ${n} ist geschlossen`);return}
     case "back": S.open=null;openForm=null;SHOWWA=false;render();return;
@@ -812,7 +830,9 @@ document.addEventListener("click",e=>{
       if(pts.some(p=>!Number.isFinite(p)||p<0)){toast("Bei den Platz-Punkten bitte nur Zahlen eintragen");return}
       if(!(bonus>=0)){toast("Bonus bitte als Zahl");return}
       S.settings={seats,pts,bonus};commit("Einstellungen gespeichert");return}
-    case "madd":{const n=val("m_nr").trim()?parseInt(val("m_nr"),10):null;
+    case "madd":{const n=val("m_nr").trim()?parseInt(val("m_nr"),10):null;const ex=n&&(ADMIN||[]).find(x=>x.nr===n);
+      if(ex){if(ex.nickname||ex.real_name||ex.pin){toast(`${n3(n)} ist schon vergeben (${ex.nickname||ex.real_name}) – in der Liste antippen`);return}
+        rpc("n2f_admin_setname",{p_token:TOKEN,p_nr:n,p_name:val("m_real")}).then(r=>{toast(r.ok?`${n3(n)} hat jetzt den Namen ${val("m_real")}`:r.msg);if(r.ok){PL=n;pull(true)}}).catch(()=>toast("Keine Verbindung"));return}
       rpc("n2f_admin_add",{p_token:TOKEN,p_nr:n,p_real:val("m_real")}).then(r=>{toast(r.ok?`Nummer ${n3(r.nr)} ist angelegt`:r.msg);if(r.ok)pull(true)}).catch(()=>toast("Keine Verbindung"));return}
     case "mfill":{const upto=parseInt(val("m_upto"),10);if(!(upto>=2&&upto<=999)){toast("Bitte eine Zahl von 2 bis 999");return}
       if(!confirm(`Alle freien Nummern bis ${n3(upto)} anlegen?`))return;a.disabled=true;a.textContent="Wird angelegt …";(async()=>{let ok=0;for(let n=2;n<=upto;n++){if(MEM[n])continue;try{const r=await rpc("n2f_admin_add",{p_token:TOKEN,p_nr:n,p_real:""});if(r.ok)ok++}catch(e){}}toast(`${ok} Nummern angelegt`);pull(true)})();return}
@@ -834,7 +854,7 @@ async function pushNow(){
   if(pushing){pending=true;return}
   pushing=true;
   try{
-    const r=await rpc("n2f_save",{p_token:TOKEN,p_version:VERSION,p_data:{settings:S.settings,tours:S.tours,carry:S.carry||null}});
+    const r=await rpc("n2f_save",{p_token:TOKEN,p_version:VERSION,p_data:{settings:S.settings,tours:S.tours,carry:S.carry||null,invited:S.invited||{}}});
     syncDot(true);
     if(r.ok) VERSION=r.version;
     else if(r.conflict){VERSION=r.version;applyShared(r.state);openForm=null;render();toast("Gerade hat jemand anderes etwas geändert. Bitte nochmal tippen.")}
