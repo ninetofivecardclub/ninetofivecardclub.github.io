@@ -219,9 +219,13 @@ button.chip{cursor:pointer}
 .drow .d1{font:700 13.5px/1.2 var(--sans);color:#3ddc84;white-space:nowrap}
 .drow .d2{display:grid;min-width:0;font:600 14.5px/1.25 var(--sans);color:#3ddc84;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .drow .d2 small{font:500 11.5px/1.4 var(--sans);color:var(--muted)}
-.drow .d4{font:600 12.5px/1 var(--sans);color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.drow .d4{display:grid;justify-items:end;gap:3px;white-space:nowrap}
+.drow .d4 .badge{font-size:10.5px;padding:3px 8px}
+.drow .d4 small,.stk small{font:600 12px/1.2 var(--sans);color:#3ddc84;font-variant-numeric:tabular-nums}
+.stk{display:grid;justify-items:end;gap:4px;flex:0 0 auto}
+.drow.in .d2 small{color:#7FCBA0}
 .drow.in{border-color:#3ddc84;background:rgba(61,220,132,.10);box-shadow:0 0 12px -2px rgba(61,220,132,.55),inset 0 0 0 1px rgba(61,220,132,.35)}
-.drow.in .d4{color:#3ddc84}
+
 .spec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px 14px;margin:0;padding:12px 14px;border-radius:10px;background:var(--bg1);border:1px solid var(--hair)}
 .spec dt{font:600 11px/1.6 var(--sans);letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 .spec dd{margin:0;font-size:15px;white-space:pre-line;overflow-wrap:anywhere}
@@ -488,6 +492,9 @@ const seasons=()=>{const s=new Set([String(new Date().getFullYear())]);Object.va
 const V=()=>document.getElementById("view");
 const tourList=()=>Object.values(S.tours).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
 const upcoming=()=>tourList().filter(t=>t.status!=="done");
+// Status mit Anzahl darunter: „Anmeldung offen“ / „12 dabei“
+const dabei=t=>t.reg.length;
+const statusCount=t=>`<span class="stk">${statusBadge(t)}${t.status==="done"?"":`<small>${dabei(t)} ${dabei(t)===1?"Spieler":"Spieler"} dabei${waiting(t).length?` · ${waiting(t).length} warten`:""}</small>`}</span>`;
 const statusBadge=t=>t.status==="done"?`<span class="badge b-done">Beendet</span>`:t.status==="run"?`<span class="badge b-run">Läuft</span>`:`<span class="badge b-open">Anmeldung offen</span>`;
 const seatTxt=r=>r.t==null?"Warteliste":`Tisch ${r.t+1} · Platz ${r.s+1}`;
 let openForm=null, editId=null;
@@ -498,7 +505,7 @@ function renderHead(){
   const up=upcoming(), live=document.getElementById("live");
   if(!up.length){live.innerHTML="";return}
   live.innerHTML=`<div class="dates"><div class="bd-lbl">Termine</div>${up.map(t=>{const d=dObj(t.date),r=myReg(t);
-    return `<button class="drow${r?" in":""}" data-goto="${t.id}"><span class="d1">${WD[d.getDay()]} ${d.getDate()}.${d.getMonth()+1}.</span><span class="d2">${esc(tTitle(t))}<small>${esc(t.time)} Uhr${t.status==="run"?" · läuft":""}</small></span><span class="d4">${r?(r.t==null?"Warteliste":"✓ T"+(r.t+1)+" · P"+(r.s+1)):seated(t).length+"/"+cap(t)}</span></button>`}).join("")}</div>`;
+    return `<button class="drow${r?" in":""}" data-goto="${t.id}"><span class="d1">${WD[d.getDay()]} ${d.getDate()}.${d.getMonth()+1}.</span><span class="d2">${esc(tTitle(t))}<small>${esc(t.time)} Uhr${r?(r.t==null?" · ✓ Warteliste":` · ✓ T${r.t+1} · P${r.s+1}`):""}</small></span><span class="d4">${statusBadge(t)}<small>${dabei(t)} dabei</small></span></button>`}).join("")}</div>`;
 }
 function render(){
   if(!ME) return;
@@ -552,7 +559,7 @@ function viewList(){
   // Startseite: alle offenen Turniere oben zur Auswahl, darunter die Tische des gewählten Turniers
   const opens=up.filter(t=>t.status==="open"), nx=opens.find(t=>t.id===HOME)||opens[0];
   if(nx){const r=myReg(nx);
-    h=`<section class="panel"><div class="ptitle"><h2>Tische</h2>${statusBadge(nx)}</div>
+    h=`<section class="panel"><div class="ptitle"><h2>Tische</h2>${statusCount(nx)}</div>
     <p class="when">${esc(tTitle(nx))} · ${esc(fmtDate(nx.date))} · ${esc(nx.time)} Uhr</p>${nx.buyin?`<p class="s" style="margin:0">Buy-in ${esc(nx.buyin)}${nx.chips?` (${esc(nx.chips)})`:""}${nx.re?` · RE ${esc(nx.re)}`:""}${nx.addon?` · Add-on ${esc(nx.addon)}`:""}</p>`:""}
     ${r?`<div class="mybox">Du bist dabei<b>${r.t==null?"Warteliste":seatTxt(r)}</b></div>`:""}
     <div style="margin-top:12px" id="home-tables">${tablesBlock(nx)}</div>
@@ -595,7 +602,7 @@ function tablesBlock(t){
 }
 function viewTour(t){
   const r=myReg(t), sc=seated(t).length, w=waiting(t);
-  let h=`<button class="back" data-act="back">‹ Alle Turniere</button><section class="panel"><div class="ptitle"><h2>${esc(tTitle(t))}</h2>${statusBadge(t)}</div>
+  let h=`<button class="back" data-act="back">‹ Alle Turniere</button><section class="panel"><div class="ptitle"><h2>${esc(tTitle(t))}</h2>${statusCount(t)}</div>
   <p class="when">${esc(fmtDate(t.date))} · ${esc(t.time)} Uhr</p>${specList(t)}
   <p class="s" style="margin:10px 0 0">${sc} von ${cap(t)} Plätzen belegt${w.length?` · ${w.length} auf der Warteliste`:""}</p>`;
   if(openForm==="edit"&&ME.admin) h+=tourForm(t);
