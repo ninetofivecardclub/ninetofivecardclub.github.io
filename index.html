@@ -133,11 +133,25 @@ button.chip{cursor:pointer}
 .bust button{display:flex;align-items:center;gap:10px;border:1px solid var(--hair);background:var(--bg1);border-radius:10px;padding:9px 12px;text-align:left;color:var(--ink)}
 .bust .pl{margin-left:auto;font:500 12.5px/1 var(--sans);color:var(--copper-lt);white-space:nowrap}
 
+/* Plätze direkt am Tisch: Tische untereinander, damit die Nummern groß genug für den Finger sind */
+.tables{grid-template-columns:1fr!important}
+.tbl svg,.tbl.t5 svg{max-width:340px!important;margin:4px auto!important}
+.tbl ol{columns:2;column-gap:16px}
+/* Plätze direkt am Tisch */
+.st .dot{fill:#363636;stroke:#5a5a5a;stroke-width:1}
+.st text{fill:#b9b3a8;pointer-events:none}
+.st.tap{cursor:pointer}
+.st.tap:hover .dot,.st.tap:focus .dot{stroke:#3ddc84;stroke-width:2}
+.st.tap:active .dot{fill:#1f5a37}
+.st.on .dot{fill:#2ecc71;stroke:#9dffc4;stroke-width:1;filter:drop-shadow(0 0 5px #2ecc71)}
+.st.on text,.st.me text{fill:#062b14}
+.st.me .dot{fill:#3ddc84;stroke:#fff;stroke-width:3;filter:drop-shadow(0 0 7px #3ddc84)}
+.tbl ol li.me{color:#3ddc84!important}
 /* Platz aussuchen */
 .tbl.pickable{cursor:pointer;transition:border-color .15s}
 .tbl.pickable:hover{border-color:var(--copper)}
 .tbl.picked{border-color:var(--copper);box-shadow:0 0 0 1px var(--copper)}
-.tbl-hint{margin:6px 0 0;font-size:11.5px;font-weight:600;color:var(--copper-lt)}
+.tbl-hint{margin:6px 0 0;font-size:11.5px;font-weight:600;color:#7FCBA0}
 .picker{margin-top:12px;padding:14px;border-radius:12px;border:1px solid var(--copper);background:var(--bg1)}
 .seatgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
 .seatb{display:grid;gap:3px;justify-items:center;padding:12px 4px;border-radius:10px;border:1px solid var(--hair-2);background:var(--card);color:var(--ink);min-width:0}
@@ -310,7 +324,8 @@ nav.tabs button[hidden]{display:none}
 const SB_URL = "https://nqlexaahsfydbqkqzkau.supabase.co";
 const SB_KEY = "sb_publishable_ufjzkyNfW3g-d8UH1BjU7A_1fkgs7K6"; // öffentlicher Schlüssel, darf in der Seite stehen
 const TABLES = 5;                                   // Tisch 1–4 + Tisch 5 (öffnet erst, wenn 1–4 voll sind)
-const DEF = {seats:9, pts:[10,9,8,7,6,5,4,3,2,1], bonus:1};   // Top 10: Platzierung (10 … 1) × Turnierfaktor + 1 · ab Platz 11: 1 Punkt (in der Verwaltung änderbar)
+const SEATS = 10;   // jeder Tisch hat immer 10 Plätze
+const DEF = {seats:SEATS, pts:[10,9,8,7,6,5,4,3,2,1], bonus:1};   // Top 10: Platzierung (10 … 1) × Turnierfaktor + 1 · ab Platz 11: 1 Punkt (in der Verwaltung änderbar)
 const REPEAT = [["1","nur einmal"],["4","jede Woche, 4 Termine"],["8","jede Woche, 8 Termine"],["4x14","alle 2 Wochen, 4 Termine"],["12","jede Woche, 12 Termine"]];
 const GAMES = ["No Limit Texas Hold’em","Pot Limit Omaha (PLO)","Dealer’s Choice"];
 const RE_MAX = [["","kein Re-Entry"],["1","1× möglich"],["2","max. 2×"],["3","max. 3×"],["u","beliebig oft"]];
@@ -398,16 +413,16 @@ const waiting=t=>t.reg.filter(r=>r.t==null).sort((a,b)=>a.at-b.at);
 // Der Host bestimmt pro Turnier, wie viele Tische offen sind (1–5). Ältere Turniere ohne Angabe: 4 (bzw. 5, wenn an Tisch 5 schon jemand sitzt).
 const openT=t=>Math.min(TABLES,Math.max(1,t.tables!=null?+t.tables:(atTable(t,4).length?5:4)));
 const isOpenT=(t,i)=>i<openT(t);
-const cap=t=>t.seats*openT(t);
-const freeSeats=(t,i)=>{const u=atTable(t,i).map(r=>r.s);return [...Array(t.seats).keys()].filter(s=>!u.includes(s))};
+const cap=t=>SEATS*openT(t);
+const freeSeats=(t,i)=>{const u=atTable(t,i).map(r=>r.s);return [...Array(SEATS).keys()].filter(s=>!u.includes(s))};
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
-function bestMain(t){let best=null;for(let i=0;i<openT(t);i++){const n=atTable(t,i).length;if(n<t.seats&&(best==null||n<atTable(t,best).length))best=i}return best}
+function bestMain(t){let best=null;for(let i=0;i<openT(t);i++){const n=atTable(t,i).length;if(n<SEATS&&(best==null||n<atTable(t,best).length))best=i}return best}
 // Platz zuteilen lassen (Host trägt ein / „egal wo“): an den leersten offenen Tisch, Platz wird ausgelost.
 function seat(t,r){const i=bestMain(t);if(i==null){r.t=null;r.s=null;return false}r.t=i;r.s=rnd(freeSeats(t,i));return true}
 // Wird ein Platz frei oder ein Tisch geöffnet, rückt die Warteliste nach.
 function rebalance(t){for(const r of waiting(t)){if(!seat(t,r))break}}
 // Spieler sucht sich selbst einen Platz aus (auch zum Wechseln).
-function takeSeat(t,nr,i,s){if(!isOpenT(t,i)||s<0||s>=t.seats||atTable(t,i).some(r=>r.s===s))return false;
+function takeSeat(t,nr,i,s){if(!isOpenT(t,i)||s<0||s>=SEATS||atTable(t,i).some(r=>r.s===s))return false;
   let r=t.reg.find(x=>x.m===nr);if(!r){r={m:nr,at:Date.now(),t:null,s:null};t.reg.push(r)}r.t=i;r.s=s;return true}
 function redraw(t){const order=t.reg.slice().sort((a,b)=>a.at-b.at);t.reg.forEach(r=>{r.t=null;r.s=null});
   const n=Math.min(order.length,cap(t)),play=order.slice(0,n).sort(()=>Math.random()-.5);play.forEach(r=>seat(t,r))}
@@ -491,13 +506,12 @@ function tourForm(t){
   <label>Re-Entry bis …<input id="f_reuntil" class="inp" maxlength="40" placeholder="z. B. bis zur Pause" value="${v("reUntil")}"></label>
   <div class="two"><label>Add-on (@on)<input id="f_addon" class="inp" maxlength="30" placeholder="z. B. 30 (100K)" value="${v("addon")}"></label><label>Pünktlich-Bonus<input id="f_early" class="inp" maxlength="20" placeholder="z. B. 20K" value="${v("early")}"></label></div>
   <label>Blinds / Ablauf<textarea id="f_blinds" class="inp" rows="3" placeholder="z. B. 5 × 30 Minuten Blinds, Ante&#10;Pause, RE Ende, @on möglich&#10;Danach 20 Minuten Blinds, Ante">${v("blinds")}</textarea></label>
-  <label>Wie viele Tische sind offen? (später erweiterbar bis 5)<select id="f_tables">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===(+d.tables||4)?"selected":""}>${n} ${n===1?"Tisch":"Tische"} · ${n*S.settings.seats} Plätze</option>`).join("")}</select></label>
+  <label>Wie viele Tische sind offen? (später erweiterbar bis 5)<select id="f_tables">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===(+d.tables||4)?"selected":""}>${n} ${n===1?"Tisch":"Tische"} · ${n*SEATS} Plätze</option>`).join("")}</select></label>
   <label>Start ab … Teilnehmern (freiwillig)<input id="f_minp" class="inp" inputmode="numeric" maxlength="3" placeholder="z. B. 16" value="${v("minp")}"></label>
   <label>Special / weitere Infos<textarea id="f_special" class="inp" rows="3" placeholder="z. B. 2/3 der Einsätze in den Bountypool, 1/3 in den Preispool&#10;High Hand bis zum Final Table gewinnt 100">${v("special")}</textarea></label>
   <label class="chk"><input type="checkbox" id="f_ranked" ${ranked(d)?"checked":""}> Das Turnier zählt zur Rangliste</label>
   <p class="s" style="margin:0">Turnierfaktor: automatisch 1 + Spielerzahl/100 (z. B. 23 Spieler = 1.23)</p>
   ${t?"":`<label>Planung – wie oft?<select id="f_repeat">${REPEAT.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></label>`}
-  ${t?"":`<p class="s" style="margin:0">Plätze pro Tisch: <b>${S.settings.seats}</b> · zusammen ${S.settings.seats*TABLES} Plätze (Tisch 5 öffnet erst, wenn 1–4 voll sind).</p>`}
   <button class="btn btn-host" data-act="${t?"tour-save":"tour-create"}">${t?"Änderungen speichern":"Turnier anlegen"}</button><button class="btn btn-line" data-act="form-close">Abbrechen</button></div>`;
 }
 function viewList(){
@@ -515,46 +529,44 @@ function viewList(){
   if(nx){const r=myReg(nx);
     h=`<section class="panel"><div class="ptitle"><h2>Nächstes Turnier</h2>${statusBadge(nx)}</div>
     <p class="when">${esc(tTitle(nx))} · ${esc(fmtDate(nx.date))} · ${esc(nx.time)} Uhr</p>${nx.buyin?`<p class="s" style="margin:0">Buy-in ${esc(nx.buyin)}${nx.chips?` (${esc(nx.chips)})`:""}${nx.re?` · RE ${esc(nx.re)}`:""}${nx.addon?` · Add-on ${esc(nx.addon)}`:""}</p>`:""}
-    ${r?`<div class="mybox">Du bist dabei<b>${r.t==null?"Warteliste":seatTxt(r)}</b></div>`:`<div class="mybox">Mitspielen?<b>Tippe auf einen Tisch und such dir einen Platz aus.</b></div>`}
+    ${r?`<div class="mybox">Du bist dabei<b>${r.t==null?"Warteliste":seatTxt(r)}</b></div>`:`<div class="mybox">Mitspielen?<b>Tippe am Tisch auf eine freie Nummer – dann bist du dabei.</b></div>`}
     <div style="margin-top:12px">${tablesBlock(nx)}</div>
     <div class="actions"><button class="btn btn-line" data-open="${nx.id}">Alle Infos zum Turnier</button></div></section>`+h}
   return h;
 }
 function tableSVG(t,i){
-  const n=t.seats, W=200, H=118, cx=100, cy=59, rx=86, ry=46, ps=atTable(t,i), locked=!isOpenT(t,i);
+  const n=SEATS, W=220, H=140, cx=110, cy=70, rx=93, ry=55, ps=atTable(t,i), locked=!isOpenT(t,i), can=!locked&&t.status==="open";
   let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tisch ${i+1}: ${ps.length} von ${n} Plätzen belegt">`;
-  g+=`<rect x="22" y="22" width="156" height="74" rx="37" fill="var(--rim)"/><rect x="30" y="30" width="140" height="58" rx="29" fill="${locked?"#2a2a2a":"var(--felt)"}" stroke="${locked?"#555":"var(--brass)"}" stroke-opacity=".6" stroke-width="1.5"/>`;
-  g+=`<text x="${cx}" y="${cy+6}" text-anchor="middle" font-family="DM Serif Display,serif" font-size="20" fill="#E2A85C">${locked?"–":(i+1)}</text>`;
+  g+=`<rect x="30" y="31" width="160" height="78" rx="39" fill="var(--rim)"/><rect x="38" y="39" width="144" height="62" rx="31" fill="${locked?"#2a2a2a":"var(--felt)"}" stroke="${locked?"#555":"var(--brass)"}" stroke-opacity=".6" stroke-width="1.5"/>`;
+  g+=`<text x="${cx}" y="${cy+7}" text-anchor="middle" font-family="DM Serif Display,serif" font-size="22" fill="#E2A85C" style="pointer-events:none">${locked?"–":(i+1)}</text>`;
   for(let s=0;s<n;s++){
-    const a=Math.PI/2+s*2*Math.PI/n, x=cx+rx*Math.cos(a), y=cy+ry*Math.sin(a), p=ps.find(r=>r.s===s), me=p&&ME&&p.m===ME.nr;
-    const fill=me?"var(--host)":p?"var(--brass)":"var(--free)", tc=me?"var(--host-ink)":p?"#1b1b1b":"var(--muted)";
-    g+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="10" fill="${fill}" ${locked?'opacity=".35"':""}/><text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="${tc}">${s+1}</text>`;
+    const a=Math.PI/2+s*2*Math.PI/n, x=(cx+rx*Math.cos(a)).toFixed(1), y=(cy+ry*Math.sin(a)).toFixed(1), p=ps.find(r=>r.s===s), me=p&&ME&&p.m===ME.nr;
+    const cls=p?(me?"st me":"st on"):"st free", tap=can&&!p;
+    const attr=tap?` data-takeseat="${t.id}:${i}:${s}" role="button" aria-label="Platz ${s+1} an Tisch ${i+1} nehmen"`:p&&can?` data-seatinfo="${esc(me?"Das ist dein Platz":`Platz ${s+1}: ${nm(p.m)}`)}"`:"";
+    g+=`<g class="${cls}${tap?" tap":""}"${attr}><circle cx="${x}" cy="${y}" r="19" fill="transparent"/><circle class="dot" cx="${x}" cy="${y}" r="13.5"${locked?' opacity=".35"':""}/><text x="${x}" y="${(+y+4.6).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700">${s+1}</text></g>`;
   }
   return g+`</svg>`;
 }
 let PICK=null;
 function tableCard(t,i){
   const ps=atTable(t,i).sort((a,b)=>a.s-b.s), locked=!isOpenT(t,i), adm=ME.admin&&t.status==="open";
-  const pick=!locked&&t.status==="open", on=pick&&PICK&&PICK.tid===t.id&&PICK.i===i, full=ps.length>=t.seats;
-  let h=`<div class="tbl${i===4?" t5":""}${locked?" closed":""}${pick?" pickable":""}${on?" picked":""}"${pick?` data-pickt="${t.id}:${i}" role="button" tabindex="0" aria-label="Tisch ${i+1}: Platz aussuchen"`:""}><div class="tbl-h"><b>Tisch ${i+1}</b><span>${locked?"geschlossen":ps.length+"/"+t.seats}</span></div>${tableSVG(t,i)}`;
+  const pick=!locked&&t.status==="open", full=ps.length>=SEATS;
+  let h=`<div class="tbl${i===4?" t5":""}${locked?" closed":""}">${tableSVG(t,i)}`;
   if(locked) h+=`<div class="lock"><span class="l">Geschlossen</span><span class="lsub">Der Host öffnet diesen Tisch bei Bedarf.</span></div>`;
   else{
     h+=ps.length?`<ol>${ps.map(r=>`<li class="${ME&&r.m===ME.nr?"me":""}"><i>${r.s+1}</i>${esc(nm(r.m))}${adm?` <a href="#" data-kick="${r.m}" data-tid="${t.id}" title="austragen" style="margin-left:auto;color:var(--stop);text-decoration:none">✕</a>`:""}</li>`).join("")}</ol>`:`<p class="s" style="margin:0">Noch frei</p>`;
-    if(pick) h+=`<p class="tbl-hint">${full?"Tisch voll":on?"Platz unten wählen ↓":"Antippen → Platz wählen"}</p>`;
   }
   return h+`</div>`;
 }
 function seatPicker(t,i){
   const ps=atTable(t,i), mine=myReg(t);
   return `<div class="picker" id="picker"><div class="ptitle"><h3 style="margin:0;color:var(--ink)">Tisch ${i+1} – Platz aussuchen</h3><button class="btn btn-line btn-sm" data-act="pickclose">Schließen</button></div>
-  <div class="seatgrid">${[...Array(t.seats).keys()].map(s=>{const p=ps.find(r=>r.s===s),me=p&&p.m===ME.nr;
+  <div class="seatgrid">${[...Array(SEATS).keys()].map(s=>{const p=ps.find(r=>r.s===s),me=p&&p.m===ME.nr;
     return `<button class="seatb${p?" taken":""}${me?" mine":""}" ${p?"disabled":""} data-takeseat="${t.id}:${i}:${s}"><b>${s+1}</b><small>${me?"Dein Platz":p?esc(nm(p.m)):"frei"}</small></button>`}).join("")}</div>
   <p class="s" style="margin:10px 0 0">${mine&&mine.t!=null?"Tippe auf einen freien Platz, um zu wechseln.":"Tippe auf einen freien Platz – dann bist du angemeldet."}</p></div>`;
 }
 function tablesBlock(t){
-  let h=`<div class="tables">${[0,1,2,3,4].map(i=>tableCard(t,i)).join("")}</div>`;
-  if(PICK&&PICK.tid===t.id&&t.status==="open"&&isOpenT(t,PICK.i)) h+=seatPicker(t,PICK.i);
-  return h;
+  return `<div class="tables">${[0,1,2,3,4].map(i=>tableCard(t,i)).join("")}</div>`;
 }
 function viewTour(t){
   const r=myReg(t), sc=seated(t).length, w=waiting(t);
@@ -563,9 +575,9 @@ function viewTour(t){
   <p class="s" style="margin:10px 0 0">${sc} von ${cap(t)} Plätzen belegt${w.length?` · ${w.length} auf der Warteliste`:""}</p>`;
   if(openForm==="edit"&&ME.admin) h+=tourForm(t);
   if(t.status==="open"){
-    if(r) h+=`<div class="mybox">Du bist angemeldet.${r.t!=null?" Zum Wechseln einfach einen anderen Tisch antippen.":""}<br><b>${r.t==null?"Warteliste – Platz "+(w.indexOf(r)+1):seatTxt(r)}</b></div><div class="actions"><button class="btn btn-stop" data-act="unreg">Abmelden</button></div>`;
+    if(r) h+=`<div class="mybox">Du bist angemeldet.${r.t!=null?" Zum Wechseln einfach eine andere freie Nummer antippen.":""}<br><b>${r.t==null?"Warteliste – Platz "+(w.indexOf(r)+1):seatTxt(r)}</b></div><div class="actions"><button class="btn btn-stop" data-act="unreg">Abmelden</button></div>`;
     else h+=sc>=cap(t)?`<div class="mybox">Alle offenen Tische sind voll.</div><div class="actions"><button class="btn btn-host" data-act="reg">Auf die Warteliste setzen</button></div>`
-      :`<div class="mybox">Mitspielen?<b>Tippe unten auf einen Tisch und such dir einen Platz aus.</b></div><div class="actions"><button class="btn btn-line" data-act="reg">Egal wo – Platz zuteilen lassen</button></div>`;
+      :`<div class="mybox">Mitspielen?<b>Tippe unten am Tisch auf eine freie Nummer – dann bist du dabei.</b></div><div class="actions"><button class="btn btn-line" data-act="reg">Egal wo – Platz zuteilen lassen</button></div>`;
   } else if(t.status==="run"&&r) h+=`<div class="mybox">Das Turnier läuft.<br><b>${seatTxt(r)}</b></div>`;
   h+=`</section>`;
   if(t.status!=="done") h+=foodPanel(t);
@@ -573,7 +585,7 @@ function viewTour(t){
     const rows=Object.entries(t.res).sort((a,b)=>a[1].place-b[1].place);
     h+=`<section class="panel"><div class="ptitle"><h2>Ergebnis</h2><span class="s">${rows.length} Spieler</span></div>${rows.map(([m,x])=>`<div class="rank${x.place<=3?" top":""}${ME.nr===+m?" me":""}"><span class="pos">${x.place}</span><span class="av${ME.nr===+m?" me":""}">${esc(ini(+m))}</span><span class="n">${esc(nm(+m))}</span><span class="pts">+${fp(x.pts)}</span></div>`).join("")}</section>`;
   } else {
-    h+=`<section class="panel"><div class="ptitle"><h2>Tische</h2><span class="s">${openT(t)} von 5 offen · ${t.seats} Plätze je Tisch</span></div>${tablesBlock(t)}`;
+    h+=`<section class="panel"><div class="ptitle"><h2>Tische</h2><span class="s">${openT(t)} von 5 offen · ${SEATS} Plätze je Tisch</span></div>${tablesBlock(t)}`;
     if(w.length) h+=`<h3>Warteliste</h3><div class="wait">${w.map((x,j)=>`<span class="chip">${j+1}. ${esc(nm(x.m))}</span>`).join("")}</div>`;
     h+=`</section>`;
   }
@@ -709,10 +721,9 @@ function viewAdmin(){
   let h=LOCAL?`<div class="note"><b>Probe-Modus:</b> Die Daten bleiben nur in diesem Browser. Für den echten Betrieb muss der Speicher (Supabase) angeschlossen werden – siehe Anleitung.</div>`:"";
   h+=playerCard()+playersPanel();
   h+=`<section class="panel"><div class="ptitle"><h2>Einstellungen</h2></div>
-  <div class="set"><div class="set-h"><b>Plätze pro Tisch</b><span>Gilt für neue Turniere</span></div>
-    <input type="hidden" id="s_seats" value="${st.seats}">
-    <div class="seg" role="radiogroup" aria-label="Plätze pro Tisch">${[6,7,8,9,10].map(n=>`<button type="button" class="seg-b" role="radio" data-seats="${n}" aria-checked="${n===st.seats}"><b>${n}</b><small>${n*TABLES} gesamt</small></button>`).join("")}</div>
-    <p class="set-note" id="s_seats_note">${st.seats} Plätze an jedem Tisch · ${st.seats*TABLES} Plätze an 5 Tischen</p></div>
+  <div class="set"><div class="set-h"><b>Plätze pro Tisch</b><span>Fest eingestellt</span></div>
+    <input type="hidden" id="s_seats" value="${SEATS}">
+    <p class="set-note" style="margin:0">Jeder Tisch hat immer <b>${SEATS} Plätze</b> · bis zu ${SEATS*TABLES} Spieler an 5 Tischen. Wie viele Tische offen sind, legst du pro Turnier fest.</p></div>
   <div class="set"><div class="set-h"><b>Punkte pro Platz</b><span>Top 10 · wird mit dem Turnierfaktor malgenommen</span></div>
     <div class="ptsgrid">${Array.from({length:10},(_,i)=>`<label class="pc"><span>Platz ${i+1}</span><input id="s_p${i}" inputmode="decimal" maxlength="5" value="${esc(st.pts[i]??0)}"></label>`).join("")}</div></div>
   <div class="set"><div class="set-h"><b>Punkte fürs Dabeisein</b><span>Bekommt jeder Mitspieler – ab Platz 11 nur diese</span></div>
@@ -742,7 +753,7 @@ document.addEventListener("click",e=>{
   const op=e.target.closest("[data-open]");
   if(op){S.tab="turniere";S.open=op.dataset.open;openForm=null;saveView();render();scrollTo(0,0);return}
   const sb=e.target.closest("[data-seats]");
-  if(sb){const n=+sb.dataset.seats;document.getElementById("s_seats").value=n;document.querySelectorAll("[data-seats]").forEach(b=>b.setAttribute("aria-checked",b===sb));
+  if(sb){const n=+sb.dataseSEATS;document.getElementById("s_seats").value=n;document.querySelectorAll("[data-seats]").forEach(b=>b.setAttribute("aria-checked",b===sb));
     document.getElementById("s_seats_note").textContent=`${n} Plätze an jedem Tisch · ${n*TABLES} Plätze an 5 Tischen`;return}
   const stp=e.target.closest("[data-step]");
   if(stp){const el=document.getElementById("s_bonus"),v=parseFloat(String(el.value).replace(",","."))||0;el.value=Math.max(0,v+ +stp.dataset.step);return}
@@ -754,9 +765,7 @@ document.addEventListener("click",e=>{
   const t=S.open&&S.tours[S.open];
   const kick=e.target.closest("[data-kick]");
   if(kick){e.preventDefault();e.stopPropagation();const tk=S.tours[kick.dataset.tid]||t;if(!tk||!ME.admin)return;const m=+kick.dataset.kick;if(!confirm(`${nm(m)} aus dem Turnier austragen?`))return;unregister(tk,m);commit(`${nm(m)} ist ausgetragen`);return}
-  const pk=e.target.closest("[data-pickt]");
-  if(pk){const [tid,ii]=pk.dataset.pickt.split(":"),i=+ii,tt=S.tours[tid];if(!tt||tt.status!=="open"||!isOpenT(tt,i))return;
-    PICK=PICK&&PICK.tid===tid&&PICK.i===i?null:{tid,i};render();setTimeout(()=>{const el=document.getElementById("picker");if(el)el.scrollIntoView({block:"center",behavior:"smooth"})},30);return}
+  const si=e.target.closest("[data-seatinfo]"); if(si){toast(si.dataset.seatinfo);return}
   const ts=e.target.closest("[data-takeseat]");
   if(ts){const [tid,ii,ss]=ts.dataset.takeseat.split(":"),i=+ii,st=+ss,tt=S.tours[tid];if(!tt||tt.status!=="open")return;const had=myReg(tt),was=had&&had.t!=null;
     if(!takeSeat(tt,ME.nr,i,st)){toast("Der Platz ist leider schon weg – bitte einen anderen wählen");render();return}
@@ -796,7 +805,7 @@ document.addEventListener("click",e=>{
       const rep=val("f_repeat")||"1", cnt=parseInt(rep,10), step=rep.includes("x14")?14:7; let first=null;
       for(let k=0;k<cnt;k++){const dt=dObj(d.date);dt.setDate(dt.getDate()+k*step);const date=`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
         const id=Date.now().toString(36)+k+Math.random().toString(36).slice(2,5);if(!first)first=id;
-        S.tours[id]={id,...d,date,seats:S.settings.seats,status:"open",reg:[],out:[],res:null,created:Date.now()}}
+        S.tours[id]={id,...d,date,seats:SEATS,status:"open",reg:[],out:[],res:null,created:Date.now()}}
       openForm=null;TPL="";S.open=cnt>1?null:first;commit(cnt>1?`${cnt} Turniere geplant!`:"Turnier steht!");return}
     case "reg":{if(!t||t.status!=="open")return;const r=register(t,ME.nr);commit(r?(r.t==null?"Du stehst auf der Warteliste":`Angemeldet – Tisch ${r.t+1}, Platz ${r.s+1}`):"");return}
     case "unreg":{if(!t||!confirm("Wirklich vom Turnier abmelden?"))return;unregister(t,ME.nr);commit("Du bist abgemeldet");return}
