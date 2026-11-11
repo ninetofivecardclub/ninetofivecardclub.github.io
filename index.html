@@ -141,6 +141,18 @@ button.chip{cursor:pointer}
 .st .dot{fill:#363636;stroke:#5a5a5a;stroke-width:1}
 .st text{fill:#b9b3a8;pointer-events:none}
 .st.tap{cursor:pointer}
+/* freie Plätze leuchten sanft und pulsieren leicht */
+.st.free.tap .dot{animation:seatGlow 2.6s ease-in-out infinite}
+.st.free.tap text{fill:#e9f7ee}
+@keyframes seatGlow{0%,100%{stroke:#5f6b63;stroke-width:1;filter:drop-shadow(0 0 0 rgba(61,220,132,0))}50%{stroke:#9dffc4;stroke-width:1.6;filter:drop-shadow(0 0 5px rgba(61,220,132,.75))}}
+@media (prefers-reduced-motion:reduce){.st.free.tap .dot{animation:none;stroke:#9dffc4}}
+/* Turnier-Auswahl oben auf der Startseite */
+.tsel{display:flex;gap:8px;overflow-x:auto;margin:12px -4px 4px;padding:2px 4px 6px;scroll-snap-type:x proximity}
+.tsel-b{flex:0 0 auto;display:grid;gap:2px;min-width:118px;max-width:170px;padding:9px 12px;border-radius:12px;border:1px solid var(--hair-2);background:var(--bg1);color:var(--ink);text-align:left;scroll-snap-align:start}
+.tsel-b b{font:600 14px/1.25 var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tsel-b small{font-size:11.5px;color:var(--muted)}
+.tsel-b[aria-pressed="true"]{border-color:var(--copper);background:rgba(200,137,59,.12)}
+.tsel-b[aria-pressed="true"] small:first-child{color:var(--copper-lt)}
 .st.tap:hover .dot,.st.tap:focus .dot{stroke:#3ddc84;stroke-width:2}
 .st.tap:active .dot{fill:#1f5a37}
 .st.on .dot{fill:#2ecc71;stroke:#9dffc4;stroke-width:1;filter:drop-shadow(0 0 5px #2ecc71)}
@@ -525,12 +537,14 @@ function viewList(){
   else h+=`<p class="empty">Noch kein Turnier geplant.${ME.admin?"":" Schau bald wieder rein."}</p>`;
   h+=`</section>`;
   if(done.length) h+=`<section class="panel"><div class="ptitle"><h2>Vergangene Turniere</h2></div>${done.map(card).join("")}</section>`;
-  const nx=up.find(t=>t.status==="open");
+  // Startseite: alle offenen Turniere oben zur Auswahl, darunter die Tische des gewählten Turniers
+  const opens=up.filter(t=>t.status==="open"), nx=opens.find(t=>t.id===HOME)||opens[0];
   if(nx){const r=myReg(nx);
-    h=`<section class="panel"><div class="ptitle"><h2>Nächstes Turnier</h2>${statusBadge(nx)}</div>
+    h=`<section class="panel"><div class="ptitle"><h2>${opens.length>1?"Nächste Turniere":"Nächstes Turnier"}</h2>${statusBadge(nx)}</div>
+    ${opens.length>1?`<div class="tsel">${opens.map(t=>{const d=dObj(t.date),me=myReg(t);return `<button class="tsel-b" data-home="${t.id}" aria-pressed="${t.id===nx.id}"><small>${WD[d.getDay()]} ${d.getDate()}.${d.getMonth()+1}.</small><b>${esc(tTitle(t))}</b><small>${t.time} Uhr${me?" · ✓ dabei":""}</small></button>`}).join("")}</div>`:""}
     <p class="when">${esc(tTitle(nx))} · ${esc(fmtDate(nx.date))} · ${esc(nx.time)} Uhr</p>${nx.buyin?`<p class="s" style="margin:0">Buy-in ${esc(nx.buyin)}${nx.chips?` (${esc(nx.chips)})`:""}${nx.re?` · RE ${esc(nx.re)}`:""}${nx.addon?` · Add-on ${esc(nx.addon)}`:""}</p>`:""}
-    ${r?`<div class="mybox">Du bist dabei<b>${r.t==null?"Warteliste":seatTxt(r)}</b></div>`:`<div class="mybox">Mitspielen?<b>Tippe am Tisch auf eine freie Nummer – dann bist du dabei.</b></div>`}
-    <div style="margin-top:12px">${tablesBlock(nx)}</div>
+    ${r?`<div class="mybox">Du bist dabei<b>${r.t==null?"Warteliste":seatTxt(r)}</b></div>`:""}
+    <div style="margin-top:12px" id="home-tables">${tablesBlock(nx)}</div>
     <div class="actions"><button class="btn btn-line" data-open="${nx.id}">Alle Infos zum Turnier</button></div></section>`+h}
   return h;
 }
@@ -547,7 +561,7 @@ function tableSVG(t,i){
   }
   return g+`</svg>`;
 }
-let PICK=null;
+let PICK=null, HOME=null;
 function tableCard(t,i){
   const ps=atTable(t,i).sort((a,b)=>a.s-b.s), locked=!isOpenT(t,i), adm=ME.admin&&t.status==="open";
   const pick=!locked&&t.status==="open", full=ps.length>=SEATS;
@@ -577,7 +591,7 @@ function viewTour(t){
   if(t.status==="open"){
     if(r) h+=`<div class="mybox">Du bist angemeldet.${r.t!=null?" Zum Wechseln einfach eine andere freie Nummer antippen.":""}<br><b>${r.t==null?"Warteliste – Platz "+(w.indexOf(r)+1):seatTxt(r)}</b></div><div class="actions"><button class="btn btn-stop" data-act="unreg">Abmelden</button></div>`;
     else h+=sc>=cap(t)?`<div class="mybox">Alle offenen Tische sind voll.</div><div class="actions"><button class="btn btn-host" data-act="reg">Auf die Warteliste setzen</button></div>`
-      :`<div class="mybox">Mitspielen?<b>Tippe unten am Tisch auf eine freie Nummer – dann bist du dabei.</b></div><div class="actions"><button class="btn btn-line" data-act="reg">Egal wo – Platz zuteilen lassen</button></div>`;
+      :`<div class="actions"><button class="btn btn-line" data-act="reg">Egal wo – Platz zuteilen lassen</button></div>`;
   } else if(t.status==="run"&&r) h+=`<div class="mybox">Das Turnier läuft.<br><b>${seatTxt(r)}</b></div>`;
   h+=`</section>`;
   if(t.status!=="done") h+=foodPanel(t);
@@ -761,6 +775,7 @@ document.addEventListener("click",e=>{
   if(wa){e.stopPropagation();const nr=+wa.dataset.wa;window.open("https://wa.me/?text="+encodeURIComponent(inviteText(nr)),"_blank","noopener");S.invited=S.invited||{};S.invited[nr]=Date.now();commit(`Einladung für ${n3(nr)} geöffnet`);return}
   const pl=e.target.closest("[data-pl]"); if(pl){PL=+pl.dataset.pl;render();scrollTo(0,0);return}
   const mf=e.target.closest("[data-mfilt]"); if(mf){MFILT=mf.dataset.mfilt;render();return}
+  const hm=e.target.closest("[data-home]"); if(hm){HOME=hm.dataset.home;render();setTimeout(()=>{const el=document.getElementById("home-tables");if(el)el.scrollIntoView({block:"start",behavior:"smooth"})},30);return}
   const se=e.target.closest("[data-season]"); if(se){S.season=se.dataset.season;render();return}
   const t=S.open&&S.tours[S.open];
   const kick=e.target.closest("[data-kick]");
