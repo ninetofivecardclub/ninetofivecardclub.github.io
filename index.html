@@ -287,8 +287,8 @@ nav.tabs button[aria-current="page"]{color:var(--copper-lt)}
 /* ================= EINSTELLUNGEN ================= */
 // Speicher: Solange SB_URL leer ist, läuft die App im PROBE-MODUS (Daten nur auf diesem Gerät).
 // Nach dem Anlegen des Supabase-Projekts hier Adresse und öffentlichen Schlüssel eintragen (siehe README.md).
-const SB_URL = "";
-const SB_KEY = "";
+const SB_URL = "https://nqlexaahsfydbqkqzkau.supabase.co";
+const SB_KEY = "sb_publishable_ufjzkyNfW3g-d8UH1BjU7A_1fkgs7K6"; // öffentlicher Schlüssel, darf in der Seite stehen
 const TABLES = 5;                                   // Tisch 1–4 + Tisch 5 (öffnet erst, wenn 1–4 voll sind)
 const DEF = {seats:9, pts:[10,9,8,7,6,5,4,3,2,1], bonus:1};   // Top 10: Platzierung (10 … 1) × Turnierfaktor + 1 · ab Platz 11: 1 Punkt (in der Verwaltung änderbar)
 const REPEAT = [["1","nur einmal"],["4","jede Woche, 4 Termine"],["8","jede Woche, 8 Termine"],["4x14","alle 2 Wochen, 4 Termine"],["12","jede Woche, 12 Termine"]];
