@@ -133,6 +133,21 @@ button.chip{cursor:pointer}
 .bust button{display:flex;align-items:center;gap:10px;border:1px solid var(--hair);background:var(--bg1);border-radius:10px;padding:9px 12px;text-align:left;color:var(--ink)}
 .bust .pl{margin-left:auto;font:500 12.5px/1 var(--sans);color:var(--copper-lt);white-space:nowrap}
 
+/* Platz aussuchen */
+.tbl.pickable{cursor:pointer;transition:border-color .15s}
+.tbl.pickable:hover{border-color:var(--copper)}
+.tbl.picked{border-color:var(--copper);box-shadow:0 0 0 1px var(--copper)}
+.tbl-hint{margin:6px 0 0;font-size:11.5px;font-weight:600;color:var(--copper-lt)}
+.picker{margin-top:12px;padding:14px;border-radius:12px;border:1px solid var(--copper);background:var(--bg1)}
+.seatgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.seatb{display:grid;gap:3px;justify-items:center;padding:12px 4px;border-radius:10px;border:1px solid var(--hair-2);background:var(--card);color:var(--ink);min-width:0}
+.seatb b{font:400 24px/1 var(--serif)}
+.seatb small{max-width:100%;font-size:11.5px;color:#7FCBA0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seatb:not(:disabled):hover{border-color:var(--copper)}
+.seatb.taken{opacity:.45;cursor:not-allowed}.seatb.taken small{color:var(--muted)}
+.seatb.mine{opacity:1;background:var(--copper);border-color:var(--copper);color:#141414}.seatb.mine small{color:#3a2a14}
+.tctl{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--bg1);border:1px solid var(--hair);font-size:13px;color:var(--muted)}
+.tctl b{font:400 20px/1.2 var(--serif);color:var(--ink)}
 /* Spieler-Übersicht für den Host */
 .plrow{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:11px 2px;border:0;border-top:1px solid var(--hair);background:transparent;color:var(--ink);text-align:left}
 #m_list .plrow:first-child{border-top:0}
@@ -237,6 +252,7 @@ nav.tabs div{display:flex;max-width:560px;width:100%}
 nav.tabs button{flex:1;min-width:0;border:0;background:transparent;padding:10px 2px 11px;font:500 11.5px/1.1 var(--sans);white-space:nowrap;color:var(--muted);display:grid;gap:4px;justify-items:center}
 nav.tabs button span{font-size:19px;line-height:1}
 nav.tabs button[aria-current="page"]{color:var(--copper-lt)}
+nav.tabs button[hidden]{display:none}
 .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);padding:10px 16px;border-radius:10px;font:500 14px/1.3 var(--sans);color:var(--ink);background:#2A2A2A;border:1px solid var(--hair-2);opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;z-index:30;box-shadow:0 8px 20px rgba(0,0,0,.5)}
 .toast.show{opacity:1}
 
@@ -371,21 +387,20 @@ function applyShared(st){st=st||{};S.settings={...DEF,...(st.settings||{})};S.to
 const atTable=(t,i)=>t.reg.filter(r=>r.t===i);
 const seated=t=>t.reg.filter(r=>r.t!=null);
 const waiting=t=>t.reg.filter(r=>r.t==null).sort((a,b)=>a.at-b.at);
-const cap=t=>t.seats*TABLES;
-const mainFree=t=>[0,1,2,3].reduce((s,i)=>s+t.seats-atTable(t,i).length,0);
-const mainFull=t=>mainFree(t)===0;
-const t5open=t=>mainFull(t)||atTable(t,4).length>0;
+// Der Host bestimmt pro Turnier, wie viele Tische offen sind (1–5). Ältere Turniere ohne Angabe: 4 (bzw. 5, wenn an Tisch 5 schon jemand sitzt).
+const openT=t=>Math.min(TABLES,Math.max(1,t.tables!=null?+t.tables:(atTable(t,4).length?5:4)));
+const isOpenT=(t,i)=>i<openT(t);
+const cap=t=>t.seats*openT(t);
 const freeSeats=(t,i)=>{const u=atTable(t,i).map(r=>r.s);return [...Array(t.seats).keys()].filter(s=>!u.includes(s))};
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
-function bestMain(t){let best=null;for(let i=0;i<4;i++){const n=atTable(t,i).length;if(n<t.seats&&(best==null||n<atTable(t,best).length))best=i}return best}
-// Platz zuteilen: immer an den leersten der Tische 1–4 (Platz wird ausgelost). Tisch 5 erst, wenn 1–4 voll sind.
-function seat(t,r){let i=bestMain(t);if(i==null&&atTable(t,4).length<t.seats)i=4;if(i==null){r.t=null;r.s=null;return false}r.t=i;r.s=rnd(freeSeats(t,i));return true}
-// Nach einer Abmeldung: Spieler von Tisch 5 rücken an Tisch 1–4 nach, dann kommt die Warteliste dran.
-function rebalance(t){
-  let i;
-  while((i=bestMain(t))!=null&&atTable(t,4).length){const r=atTable(t,4).sort((a,b)=>b.at-a.at)[0];r.t=i;r.s=rnd(freeSeats(t,i))}
-  for(const r of waiting(t)){if(!seat(t,r))break}
-}
+function bestMain(t){let best=null;for(let i=0;i<openT(t);i++){const n=atTable(t,i).length;if(n<t.seats&&(best==null||n<atTable(t,best).length))best=i}return best}
+// Platz zuteilen lassen (Host trägt ein / „egal wo“): an den leersten offenen Tisch, Platz wird ausgelost.
+function seat(t,r){const i=bestMain(t);if(i==null){r.t=null;r.s=null;return false}r.t=i;r.s=rnd(freeSeats(t,i));return true}
+// Wird ein Platz frei oder ein Tisch geöffnet, rückt die Warteliste nach.
+function rebalance(t){for(const r of waiting(t)){if(!seat(t,r))break}}
+// Spieler sucht sich selbst einen Platz aus (auch zum Wechseln).
+function takeSeat(t,nr,i,s){if(!isOpenT(t,i)||s<0||s>=t.seats||atTable(t,i).some(r=>r.s===s))return false;
+  let r=t.reg.find(x=>x.m===nr);if(!r){r={m:nr,at:Date.now(),t:null,s:null};t.reg.push(r)}r.t=i;r.s=s;return true}
 function redraw(t){const order=t.reg.slice().sort((a,b)=>a.at-b.at);t.reg.forEach(r=>{r.t=null;r.s=null});
   const n=Math.min(order.length,cap(t)),play=order.slice(0,n).sort(()=>Math.random()-.5);play.forEach(r=>seat(t,r))}
 const myReg=t=>ME&&t.reg.find(r=>r.m===ME.nr);
@@ -452,7 +467,7 @@ function render(){
 }
 
 let TPL="";
-const FIELDS=["title","game","time","buyin","chips","re","reMax","reUntil","addon","early","blinds","minp","special","ranked","factor"];
+const FIELDS=["tables","title","game","time","buyin","chips","re","reMax","reUntil","addon","early","blinds","minp","special","ranked","factor"];
 function tourForm(t){
   const src=!t&&TPL&&S.tours[TPL];
   const d=t||(src?Object.assign({date:todayKey},...FIELDS.map(k=>({[k]:src[k]}))):{date:todayKey,time:"19:00",game:GAMES[0],ranked:true,factor:1});
@@ -468,6 +483,7 @@ function tourForm(t){
   <label>Re-Entry bis …<input id="f_reuntil" class="inp" maxlength="40" placeholder="z. B. bis zur Pause" value="${v("reUntil")}"></label>
   <div class="two"><label>Add-on (@on)<input id="f_addon" class="inp" maxlength="30" placeholder="z. B. 30 (100K)" value="${v("addon")}"></label><label>Pünktlich-Bonus<input id="f_early" class="inp" maxlength="20" placeholder="z. B. 20K" value="${v("early")}"></label></div>
   <label>Blinds / Ablauf<textarea id="f_blinds" class="inp" rows="3" placeholder="z. B. 5 × 30 Minuten Blinds, Ante&#10;Pause, RE Ende, @on möglich&#10;Danach 20 Minuten Blinds, Ante">${v("blinds")}</textarea></label>
+  <label>Wie viele Tische sind offen? (später erweiterbar bis 5)<select id="f_tables">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===(+d.tables||4)?"selected":""}>${n} ${n===1?"Tisch":"Tische"} · ${n*S.settings.seats} Plätze</option>`).join("")}</select></label>
   <label>Start ab … Teilnehmern (freiwillig)<input id="f_minp" class="inp" inputmode="numeric" maxlength="3" placeholder="z. B. 16" value="${v("minp")}"></label>
   <label>Special / weitere Infos<textarea id="f_special" class="inp" rows="3" placeholder="z. B. 2/3 der Einsätze in den Bountypool, 1/3 in den Preispool&#10;High Hand bis zum Final Table gewinnt 100">${v("special")}</textarea></label>
   <label class="chk"><input type="checkbox" id="f_ranked" ${ranked(d)?"checked":""}> Das Turnier zählt zur Rangliste</label>
@@ -487,10 +503,17 @@ function viewList(){
   else h+=`<p class="empty">Noch kein Turnier geplant.${ME.admin?"":" Schau bald wieder rein."}</p>`;
   h+=`</section>`;
   if(done.length) h+=`<section class="panel"><div class="ptitle"><h2>Vergangene Turniere</h2></div>${done.map(card).join("")}</section>`;
+  const nx=up.find(t=>t.status==="open");
+  if(nx){const r=myReg(nx);
+    h=`<section class="panel"><div class="ptitle"><h2>Nächstes Turnier</h2>${statusBadge(nx)}</div>
+    <p class="when">${esc(tTitle(nx))} · ${esc(fmtDate(nx.date))} · ${esc(nx.time)} Uhr</p>${nx.buyin?`<p class="s" style="margin:0">Buy-in ${esc(nx.buyin)}${nx.chips?` (${esc(nx.chips)})`:""}${nx.re?` · RE ${esc(nx.re)}`:""}${nx.addon?` · Add-on ${esc(nx.addon)}`:""}</p>`:""}
+    ${r?`<div class="mybox">Du bist dabei<b>${r.t==null?"Warteliste":seatTxt(r)}</b></div>`:`<div class="mybox">Mitspielen?<b>Tippe auf einen Tisch und such dir einen Platz aus.</b></div>`}
+    <div style="margin-top:12px">${tablesBlock(nx)}</div>
+    <div class="actions"><button class="btn btn-line" data-open="${nx.id}">Alle Infos zum Turnier</button></div></section>`+h}
   return h;
 }
 function tableSVG(t,i){
-  const n=t.seats, W=200, H=118, cx=100, cy=59, rx=86, ry=46, ps=atTable(t,i), locked=i===4&&!t5open(t);
+  const n=t.seats, W=200, H=118, cx=100, cy=59, rx=86, ry=46, ps=atTable(t,i), locked=!isOpenT(t,i);
   let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tisch ${i+1}: ${ps.length} von ${n} Plätzen belegt">`;
   g+=`<rect x="22" y="22" width="156" height="74" rx="37" fill="var(--rim)"/><rect x="30" y="30" width="140" height="58" rx="29" fill="${locked?"#2a2a2a":"var(--felt)"}" stroke="${locked?"#555":"var(--brass)"}" stroke-opacity=".6" stroke-width="1.5"/>`;
   g+=`<text x="${cx}" y="${cy+6}" text-anchor="middle" font-family="DM Serif Display,serif" font-size="20" fill="#E2A85C">${locked?"–":(i+1)}</text>`;
@@ -501,12 +524,29 @@ function tableSVG(t,i){
   }
   return g+`</svg>`;
 }
+let PICK=null;
 function tableCard(t,i){
-  const ps=atTable(t,i).sort((a,b)=>a.s-b.s), locked=i===4&&!t5open(t), adm=ME.admin&&t.status==="open";
-  let h=`<div class="tbl${i===4?" t5":""}${locked?" closed":""}"><div class="tbl-h"><b>Tisch ${i+1}</b><span>${locked?"zu":ps.length+"/"+t.seats}</span></div>${tableSVG(t,i)}`;
-  if(locked) h+=`<div class="lock"><span class="l">Geschlossen</span><span class="lsub">Tisch 5 öffnet erst, wenn Tisch 1–4 voll sind. Noch ${mainFree(t)} ${mainFree(t)===1?"Platz":"Plätze"} frei.</span></div>`;
-  else h+=ps.length?`<ol>${ps.map(r=>`<li class="${ME&&r.m===ME.nr?"me":""}"><i>${r.s+1}</i>${esc(nm(r.m))}${adm?` <a href="#" data-kick="${r.m}" title="austragen" style="margin-left:auto;color:var(--stop);text-decoration:none">✕</a>`:""}</li>`).join("")}</ol>`:`<p class="s" style="margin:0">Noch frei</p>`;
+  const ps=atTable(t,i).sort((a,b)=>a.s-b.s), locked=!isOpenT(t,i), adm=ME.admin&&t.status==="open";
+  const pick=!locked&&t.status==="open", on=pick&&PICK&&PICK.tid===t.id&&PICK.i===i, full=ps.length>=t.seats;
+  let h=`<div class="tbl${i===4?" t5":""}${locked?" closed":""}${pick?" pickable":""}${on?" picked":""}"${pick?` data-pickt="${t.id}:${i}" role="button" tabindex="0" aria-label="Tisch ${i+1}: Platz aussuchen"`:""}><div class="tbl-h"><b>Tisch ${i+1}</b><span>${locked?"geschlossen":ps.length+"/"+t.seats}</span></div>${tableSVG(t,i)}`;
+  if(locked) h+=`<div class="lock"><span class="l">Geschlossen</span><span class="lsub">Der Host öffnet diesen Tisch bei Bedarf.</span></div>`;
+  else{
+    h+=ps.length?`<ol>${ps.map(r=>`<li class="${ME&&r.m===ME.nr?"me":""}"><i>${r.s+1}</i>${esc(nm(r.m))}${adm?` <a href="#" data-kick="${r.m}" data-tid="${t.id}" title="austragen" style="margin-left:auto;color:var(--stop);text-decoration:none">✕</a>`:""}</li>`).join("")}</ol>`:`<p class="s" style="margin:0">Noch frei</p>`;
+    if(pick) h+=`<p class="tbl-hint">${full?"Tisch voll":on?"Platz unten wählen ↓":"Antippen → Platz wählen"}</p>`;
+  }
   return h+`</div>`;
+}
+function seatPicker(t,i){
+  const ps=atTable(t,i), mine=myReg(t);
+  return `<div class="picker" id="picker"><div class="ptitle"><h3 style="margin:0;color:var(--ink)">Tisch ${i+1} – Platz aussuchen</h3><button class="btn btn-line btn-sm" data-act="pickclose">Schließen</button></div>
+  <div class="seatgrid">${[...Array(t.seats).keys()].map(s=>{const p=ps.find(r=>r.s===s),me=p&&p.m===ME.nr;
+    return `<button class="seatb${p?" taken":""}${me?" mine":""}" ${p?"disabled":""} data-takeseat="${t.id}:${i}:${s}"><b>${s+1}</b><small>${me?"Dein Platz":p?esc(nm(p.m)):"frei"}</small></button>`}).join("")}</div>
+  <p class="s" style="margin:10px 0 0">${mine&&mine.t!=null?"Tippe auf einen freien Platz, um zu wechseln.":"Tippe auf einen freien Platz – dann bist du angemeldet."}</p></div>`;
+}
+function tablesBlock(t){
+  let h=`<div class="tables">${[0,1,2,3,4].map(i=>tableCard(t,i)).join("")}</div>`;
+  if(PICK&&PICK.tid===t.id&&t.status==="open"&&isOpenT(t,PICK.i)) h+=seatPicker(t,PICK.i);
+  return h;
 }
 function viewTour(t){
   const r=myReg(t), sc=seated(t).length, w=waiting(t);
@@ -515,8 +555,9 @@ function viewTour(t){
   <p class="s" style="margin:10px 0 0">${sc} von ${cap(t)} Plätzen belegt${w.length?` · ${w.length} auf der Warteliste`:""}</p>`;
   if(openForm==="edit"&&ME.admin) h+=tourForm(t);
   if(t.status==="open"){
-    if(r) h+=`<div class="mybox">Du bist angemeldet.<br><b>${r.t==null?"Warteliste – Platz "+(w.indexOf(r)+1):seatTxt(r)}</b></div><div class="actions"><button class="btn btn-stop" data-act="unreg">Abmelden</button></div>`;
-    else h+=`<div class="actions"><button class="btn btn-host" data-act="reg">${sc>=cap(t)?"Auf die Warteliste setzen":"Jetzt anmelden"}</button></div>`;
+    if(r) h+=`<div class="mybox">Du bist angemeldet.${r.t!=null?" Zum Wechseln einfach einen anderen Tisch antippen.":""}<br><b>${r.t==null?"Warteliste – Platz "+(w.indexOf(r)+1):seatTxt(r)}</b></div><div class="actions"><button class="btn btn-stop" data-act="unreg">Abmelden</button></div>`;
+    else h+=sc>=cap(t)?`<div class="mybox">Alle offenen Tische sind voll.</div><div class="actions"><button class="btn btn-host" data-act="reg">Auf die Warteliste setzen</button></div>`
+      :`<div class="mybox">Mitspielen?<b>Tippe unten auf einen Tisch und such dir einen Platz aus.</b></div><div class="actions"><button class="btn btn-line" data-act="reg">Egal wo – Platz zuteilen lassen</button></div>`;
   } else if(t.status==="run"&&r) h+=`<div class="mybox">Das Turnier läuft.<br><b>${seatTxt(r)}</b></div>`;
   h+=`</section>`;
   if(t.status!=="done") h+=foodPanel(t);
@@ -524,7 +565,7 @@ function viewTour(t){
     const rows=Object.entries(t.res).sort((a,b)=>a[1].place-b[1].place);
     h+=`<section class="panel"><div class="ptitle"><h2>Ergebnis</h2><span class="s">${rows.length} Spieler</span></div>${rows.map(([m,x])=>`<div class="rank${x.place<=3?" top":""}${ME.nr===+m?" me":""}"><span class="pos">${x.place}</span><span class="av${ME.nr===+m?" me":""}">${esc(ini(+m))}</span><span class="n">${esc(nm(+m))}</span><span class="pts">+${fp(x.pts)}</span></div>`).join("")}</section>`;
   } else {
-    h+=`<section class="panel"><div class="ptitle"><h2>Tische</h2><span class="s">${t.seats} Plätze je Tisch</span></div><div class="tables">${[0,1,2,3,4].map(i=>tableCard(t,i)).join("")}</div>`;
+    h+=`<section class="panel"><div class="ptitle"><h2>Tische</h2><span class="s">${openT(t)} von 5 offen · ${t.seats} Plätze je Tisch</span></div>${tablesBlock(t)}`;
     if(w.length) h+=`<h3>Warteliste</h3><div class="wait">${w.map((x,j)=>`<span class="chip">${j+1}. ${esc(nm(x.m))}</span>`).join("")}</div>`;
     h+=`</section>`;
   }
@@ -559,6 +600,7 @@ let SHOWWA=false;
 function adminTour(t){
   let h=`<section class="panel"><div class="ptitle"><h2>Turnierleitung</h2></div>`;
   if(t.status==="open"){
+    h+=`<div class="tctl"><span>Offene Tische<br><b>${openT(t)} von 5</b></span><div class="adm-btns"><button class="btn btn-line" data-act="tclose" ${openT(t)<=1?"disabled":""}>− Tisch</button><button class="btn btn-host" data-act="topen" ${openT(t)>=TABLES?"disabled":""}>+ Tisch öffnen</button></div></div>`;
     h+=`<div class="form"><label>Spieler eintragen (Nummer)<input id="addnr" class="inp" inputmode="numeric" maxlength="3" placeholder="z. B. 12"></label><button class="btn btn-main" data-act="addp">Eintragen</button></div>
     <div class="actions"><button class="btn btn-brass" data-act="start" ${seated(t).length<2?"disabled":""}>Anmeldung schließen &amp; Turnier starten</button><button class="btn btn-line" data-act="redraw" ${!t.reg.length?"disabled":""}>Plätze neu auslosen</button><button class="btn btn-main" data-act="wa">Text für WhatsApp kopieren</button><button class="btn btn-line" data-act="form-edit">Turnier bearbeiten</button><button class="btn btn-line" data-act="del" style="color:var(--stop)">Turnier löschen</button></div>`;
   } else if(t.status==="run"){
@@ -682,7 +724,7 @@ function viewAdmin(){
 function commit(msg){render();pushNow();if(msg)toast(msg)}
 document.addEventListener("click",e=>{
   const tab=e.target.closest("nav.tabs button");
-  if(tab){S.tab=tab.dataset.tab;S.open=null;PL=null;openForm=null;saveView();render();scrollTo(0,0);return}
+  if(tab){S.tab=tab.dataset.tab;S.open=null;PL=null;PICK=null;openForm=null;saveView();render();scrollTo(0,0);return}
   const op=e.target.closest("[data-open]");
   if(op){S.tab="turniere";S.open=op.dataset.open;openForm=null;saveView();render();scrollTo(0,0);return}
   const sb=e.target.closest("[data-seats]");
@@ -695,7 +737,14 @@ document.addEventListener("click",e=>{
   const se=e.target.closest("[data-season]"); if(se){S.season=se.dataset.season;render();return}
   const t=S.open&&S.tours[S.open];
   const kick=e.target.closest("[data-kick]");
-  if(kick){e.preventDefault();if(!t||!ME.admin)return;const m=+kick.dataset.kick;if(!confirm(`${nm(m)} aus dem Turnier austragen?`))return;unregister(t,m);commit(`${nm(m)} ist ausgetragen`);return}
+  if(kick){e.preventDefault();e.stopPropagation();const tk=S.tours[kick.dataset.tid]||t;if(!tk||!ME.admin)return;const m=+kick.dataset.kick;if(!confirm(`${nm(m)} aus dem Turnier austragen?`))return;unregister(tk,m);commit(`${nm(m)} ist ausgetragen`);return}
+  const pk=e.target.closest("[data-pickt]");
+  if(pk){const [tid,ii]=pk.dataset.pickt.split(":"),i=+ii,tt=S.tours[tid];if(!tt||tt.status!=="open"||!isOpenT(tt,i))return;
+    PICK=PICK&&PICK.tid===tid&&PICK.i===i?null:{tid,i};render();setTimeout(()=>{const el=document.getElementById("picker");if(el)el.scrollIntoView({block:"center",behavior:"smooth"})},30);return}
+  const ts=e.target.closest("[data-takeseat]");
+  if(ts){const [tid,ii,ss]=ts.dataset.takeseat.split(":"),i=+ii,st=+ss,tt=S.tours[tid];if(!tt||tt.status!=="open")return;const had=myReg(tt),was=had&&had.t!=null;
+    if(!takeSeat(tt,ME.nr,i,st)){toast("Der Platz ist leider schon weg – bitte einen anderen wählen");render();return}
+    PICK=null;commit(was?`Platz gewechselt – Tisch ${i+1}, Platz ${st+1}`:`Du bist dabei – Tisch ${i+1}, Platz ${st+1}`);return}
   const fo=e.target.closest("[data-food]");
   if(fo&&t&&t.food){const o=t.food.opts[+fo.dataset.food];if(o==null)return;const v=t.food.votes,m=v[ME.nr]||[];
     v[ME.nr]=m.includes(o)?m.filter(x=>x!==o):[...m,o];if(!v[ME.nr].length)delete v[ME.nr];commit(m.includes(o)?"":"Auswahl gespeichert");return}
@@ -712,6 +761,9 @@ document.addEventListener("click",e=>{
   switch(act){
     case "logout": rpc("n2f_logout",{p_token:TOKEN}).catch(()=>{});setToken(null);ME=null;showLogin();return;
     case "plclose": PL=null;render();return;
+    case "pickclose": PICK=null;render();return;
+    case "topen": if(openT(t)>=TABLES)return;t.tables=openT(t)+1;rebalance(t);commit(`Tisch ${t.tables} ist jetzt offen`);return;
+    case "tclose":{const n=openT(t);if(n<=1)return;if(atTable(t,n-1).length){toast(`An Tisch ${n} sitzen noch Spieler – erst austragen`);return}t.tables=n-1;PICK=null;commit(`Tisch ${n} ist geschlossen`);return}
     case "back": S.open=null;openForm=null;SHOWWA=false;render();return;
     case "form-new": openForm="new";TPL="";render();return;
     case "form-edit": openForm="edit";render();return;
@@ -719,10 +771,10 @@ document.addEventListener("click",e=>{
     case "tour-create": case "tour-save":{
       const tx=id=>val(id).trim();
       const d={date:val("f_date"),time:val("f_time"),game:val("f_game"),title:tx("f_title"),buyin:tx("f_buyin"),chips:tx("f_chips"),re:tx("f_re"),reMax:val("f_remax"),reUntil:tx("f_reuntil"),
-        addon:tx("f_addon"),early:tx("f_early"),blinds:tx("f_blinds"),minp:tx("f_minp").replace(/\D/g,""),special:tx("f_special"),info:"",ranked:document.getElementById("f_ranked").checked,factor:null};
+        addon:tx("f_addon"),early:tx("f_early"),blinds:tx("f_blinds"),minp:tx("f_minp").replace(/\D/g,""),special:tx("f_special"),info:"",tables:+val("f_tables")||4,ranked:document.getElementById("f_ranked").checked,factor:null};
       if(!/^\d{4}-\d\d-\d\d$/.test(d.date)){toast("Bitte ein Datum wählen");return}
       if(!/^\d\d:\d\d$/.test(d.time)){toast("Bitte eine Uhrzeit wählen");return}
-      if(act==="tour-save"){Object.assign(t,d);openForm=null;commit("Gespeichert");return}
+      if(act==="tour-save"){const used=Math.max(0,...t.reg.filter(r=>r.t!=null).map(r=>r.t+1));if(d.tables<used){toast(`An Tisch ${used} sitzen noch Spieler – erst umsetzen`);return}Object.assign(t,d);rebalance(t);openForm=null;commit("Gespeichert");return}
       const rep=val("f_repeat")||"1", cnt=parseInt(rep,10), step=rep.includes("x14")?14:7; let first=null;
       for(let k=0;k<cnt;k++){const dt=dObj(d.date);dt.setDate(dt.getDate()+k*step);const date=`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
         const id=Date.now().toString(36)+k+Math.random().toString(36).slice(2,5);if(!first)first=id;
